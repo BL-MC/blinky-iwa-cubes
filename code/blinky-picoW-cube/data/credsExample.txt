@@ -1,0 +1,10 @@
+{yourSsid}
+{yourSsidPassword}
+{your.mqttbroker.com}
+{yourMqttUsername}
+{yourMqttPassword}
+{yourBox}
+{yourTrayType}
+{yourTrayName}
+{yourCubeType}
+
