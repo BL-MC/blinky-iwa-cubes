@@ -36,10 +36,10 @@ union CubeData
   {
     int16_t state;
     int16_t watchdog;
-    int16_t sendStationCommand;
     int16_t newData;
-    StationReport stationReport;
+    int16_t sendStationCommand;
     StationCommand stationCommand;
+    StationReport stationReport;
   };
   byte buffer[32];
 };
@@ -146,18 +146,12 @@ void handleNewSettingFromServer(uint8_t address)
 {
   switch(address)
   {
-    case 0:
-      break;
-    case 1:
-      break;
-    case 2:
+    case 3:
       if (cubeData.sendStationCommand > 0)
       {
         Serial1.write(cubeData.stationCommand.buffer, sizeOfStationCommand);
         cubeData.sendStationCommand = 0;
       }
-      break;
-    case 3:
       break;
     case 4:
       break;
