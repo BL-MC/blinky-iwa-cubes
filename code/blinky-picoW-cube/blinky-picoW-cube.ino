@@ -37,10 +37,11 @@ union CubeData
     int16_t state;
     int16_t watchdog;
     int16_t sendStationCommand;
+    int16_t newData;
     StationReport stationReport;
     StationCommand stationCommand;
   };
-  byte buffer[30];
+  byte buffer[32];
 };
 CubeData cubeData;
 
@@ -81,15 +82,19 @@ void setupCube()
   cubeData.state = 1;
   cubeData.watchdog = 0;
   cubeData.sendStationCommand = 0;
+  cubeData.newData = 0;
+  lastPublishTime = millis();
   Serial1.begin(57600);
 }
 
 void cubeLoop()
 {
+  unsigned long nowTime = millis();
   while (Serial1.available() > 0) 
   {
     Serial1.readBytes(cubeData.stationReport.buffer, sizeOfStationReport);
     cubeData.watchdog = cubeData.watchdog + 1;
+    cubeData.newData = 1;
     if (cubeData.watchdog > 32765) cubeData.watchdog = 0;
     BlinkyPicoWCube.publishToServer();
     BlinkyPicoWCube.loop();
@@ -114,7 +119,27 @@ void cubeLoop()
       Serial.print(", rssi: ");
       Serial.println(cubeData.stationReport.irssi);
     }
+    cubeData.newData = 0;
+    cubeData.stationReport.iaddr = 0;
+    cubeData.stationReport.ivbat = 0;
+    cubeData.stationReport.ivusb = 0;
+    cubeData.stationReport.ibutt = 0;
+    cubeData.stationReport.imove = 0;
+    cubeData.stationReport.ichrg = 0;
+    cubeData.stationReport.iauth = 0;
+    cubeData.stationReport.iaddr = 0;
+    cubeData.stationReport.iwatchdog = 0;
+    cubeData.stationReport.irssi = 0;
+    lastPublishTime = nowTime;
   }
+  
+  if ((nowTime - lastPublishTime) > publishInterval)
+  {
+    lastPublishTime = nowTime;
+    cubeData.watchdog = cubeData.watchdog + 1;
+    if (cubeData.watchdog > 32760) cubeData.watchdog= 0 ;
+    BlinkyPicoWCube.publishToServer();
+  } 
 }
 
 void handleNewSettingFromServer(uint8_t address)
