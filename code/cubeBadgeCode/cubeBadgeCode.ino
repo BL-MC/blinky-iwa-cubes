@@ -1,4 +1,4 @@
-#define DEVICE_ADDRESS        42
+#define DEVICE_ADDRESS        10
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
 #define RF_FREQ               433.200
@@ -32,7 +32,7 @@ float rfFreq = RF_FREQ;
 
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
-const int commLEDPin = LED_BUILTIN;
+const int commLEDPin = 12; //LED_BUILTIN;
 const int vbatPin = A7;
 const int vusbPin = A1;
 const int buttPin = 5;
@@ -173,6 +173,7 @@ void checkButton(unsigned long now)
 void checkMotion(unsigned long now)
 {
   int movePinValue = digitalRead(movePin);
+  
   accel.readRegister(ADXL345_REG_INT_SOURCE);
   if (movePinValue > 0)
   {
@@ -186,6 +187,7 @@ void checkMotion(unsigned long now)
     {
       lastMotionWarnTime = now;
       soundBeep(500, mesgPin);
+      accel.readRegister(ADXL345_REG_INT_SOURCE);
     }
     if ((now - lastMotionErrorTime) > NO_MOTION_INTERVAL)
     {
