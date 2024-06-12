@@ -89,6 +89,8 @@ unsigned long lastPublishTime = 0;
 
 void setup() 
 {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
   pinMode(A0, INPUT);
   pinMode(vbatPin, INPUT);
   pinMode(vusbPin, INPUT);
@@ -158,8 +160,12 @@ void checkButton(unsigned long now)
       {
         if (badgeStatus.ichrg == 0)
         {
-          transmitMsg(now);
-          for (int ii = 0; ii < 3; ++ii) soundBeep(500, mesgPin);
+          for (int ij = 0; ij < 3; ++ij)
+          {
+            transmitMsg(now);
+            for (int ii = 0; ii < 3; ++ii) soundBeep(100, mesgPin);
+            if (ij < 2) delay(4000);
+          }
         }
         else
         {
@@ -195,7 +201,7 @@ void checkMotion(unsigned long now)
       lastMotionErrorTime = now;
       badgeStatus.imove = 1;
       transmitMsg(now);
-      for (int ii = 0; ii < 3; ++ii) soundBeep(500, mesgPin);
+      for (int ii = 0; ii < 3; ++ii) soundBeep(100, mesgPin);
       badgeStatus.imove = 0;
     }
   }
@@ -260,7 +266,7 @@ void checkForMessage()
 }
 void soundSOS(int ipin)
 {
-  int idelay[3] = {250,500,250};
+  int idelay[3] = {100,200,100};
   for (int is = 0; is < 3; ++is)
   {
     for (int ii = 0; ii < 3; ++ii)
