@@ -2,6 +2,7 @@
 #define DEVICE_ADDRESS        11
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
+#define NO_MOTION_ALARM_INT     5000
 #define RF_FREQ               433.200
 #define PUBLISH_INTERVAL      30000
 #define PUBLISH_OFFSET        10000
@@ -90,7 +91,8 @@ unsigned long lastMotionErrorTime = 0;
 unsigned long lastMotionWarnTime = 0;  
 unsigned long publishInterval = PUBLISH_INTERVAL;     
 unsigned long lastPublishTime = 0;     
-unsigned long lastAuthTime = 0;     
+unsigned long lastAuthTime = 0; 
+unsigned long lastMotionAlarmTime = 0; 
 int16_t old_imsid = 0;
 
 void setup() 
@@ -147,6 +149,7 @@ void setup()
   lastMotionErrorTime = lastPublishTime;
   lastMotionWarnTime = lastPublishTime;
   lastAuthTime = lastPublishTime;
+  lastMotionAlarmTime = lastPublishTime;
    
 }
 void loop() 
@@ -157,6 +160,7 @@ void loop()
   checkButton(now);
   checkMotion(now);
   checkCharging(now);
+  if ((stationStatus.iwarn > 0)  && (badgeStatus.ichrg == 0) ) soundSOS();
   if ((now - lastPublishTime) > publishInterval) transmitMsg(now);
   checkForMessage(now);
 }
@@ -216,30 +220,51 @@ void checkMotion(unsigned long now)
   {
     lastMotionErrorTime = now;
     lastMotionWarnTime = now;
-    badgeStatus.imove = 0;
     if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
     {
       digitalWrite(commLEDPin, LOW);
       digitalWrite(mesgPin, LOW); 
+      if (badgeStatus.imove == 1) 
+      {
+        badgeStatus.imove = 0;
+        transmitMsg(now);
+      }
     }
+    badgeStatus.imove = 0;
   }
-   if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
+  if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
   {
     if ((now - lastMotionWarnTime) > NO_MOTION_WARN)
     {
       lastMotionWarnTime = now;
-      soundBeep(500);
-      accel.readRegister(ADXL345_REG_INT_SOURCE);
+      if (badgeStatus.imove == 0)
+      {
+        soundBeep(500);
+        accel.readRegister(ADXL345_REG_INT_SOURCE);
+      }
     }
     if ((now - lastMotionErrorTime) > NO_MOTION_INTERVAL)
     {
       lastMotionWarnTime = now;
       lastMotionErrorTime = now;
-      badgeStatus.imove = 1;
-      transmitMsg(now);
-      for (int ii = 0; ii < 3; ++ii) soundBeep(500);
-      digitalWrite(commLEDPin, HIGH);
-      accel.readRegister(ADXL345_REG_INT_SOURCE);
+      if (badgeStatus.imove == 0)
+      {
+        badgeStatus.imove = 1;
+        transmitMsg(now);
+        for (int ii = 0; ii < 3; ++ii) soundBeep(500);
+        digitalWrite(commLEDPin, HIGH);
+        accel.readRegister(ADXL345_REG_INT_SOURCE);
+      }
+    }
+    if ((now - lastMotionAlarmTime) > NO_MOTION_ALARM_INT)
+    {
+      lastMotionAlarmTime = now;
+      if (badgeStatus.imove > 0)
+      {
+        soundBeep(500);
+        digitalWrite(commLEDPin, HIGH);
+        accel.readRegister(ADXL345_REG_INT_SOURCE);
+      }
     }
   }
 }
