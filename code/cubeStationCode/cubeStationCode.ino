@@ -46,14 +46,16 @@ union StationCommand
     int16_t iaddr;
     int16_t iwarn;
     int16_t iauth;
+    int16_t imsid;
   };
-  byte buffer[6];
+  byte buffer[8];
 };
 StationCommand stationCommand;
-uint8_t sizeOfStationCommand = 6;
+uint8_t sizeOfStationCommand = 8;
 
 struct RadioPacketBadge
 {
+  byte itype;
   byte iaddr;
   byte istatus;
   int16_t ivbat;
@@ -61,16 +63,19 @@ struct RadioPacketBadge
   int16_t iwatchdog;
 };
 RadioPacketBadge radioPacketBadge;
-uint8_t sizeOfRadioPacketBadge = 8;
+uint8_t sizeOfRadioPacketBadge = 9;
 
 struct RadioPacketStation
 {
+  byte itype;
   byte iaddr;
   byte istatus;
+  int16_t imsid;
+  byte extra[4];
 };
 
 RadioPacketStation radioPacketStation;
-uint8_t sizeOfRadioPacketStation = 2;
+uint8_t sizeOfRadioPacketStation = 9;
 
 void setup() 
 {
@@ -103,47 +108,51 @@ void loop()
   {
     if (rf95.recv((uint8_t *)&radioPacketBadge, &sizeOfRadioPacketBadge))
     {
-      digitalWrite(commLEDPin, HIGH);
-      stationReport.iaddr = (int16_t) radioPacketBadge.iaddr;
-      stationReport.ivbat = (int16_t) radioPacketBadge.ivbat;
-      stationReport.ivusb = (int16_t) radioPacketBadge.ivusb;
-      stationReport.iwatchdog = (int16_t) radioPacketBadge.iwatchdog;
-      stationReport.ibutt = (int16_t) ((radioPacketBadge.istatus >> 0) & 0x01);
-      stationReport.imove = (int16_t) ((radioPacketBadge.istatus >> 1) & 0x01);
-      stationReport.ichrg = (int16_t) ((radioPacketBadge.istatus >> 2) & 0x01);
-      stationReport.iauth = (int16_t) ((radioPacketBadge.istatus >> 3) & 0x01);
-      stationReport.irssi = (int16_t) rf95.lastRssi();
-      Serial1.write(stationReport.buffer, sizeOfStationReport);
-        
-      Serial.print("addr: ");
-      Serial.print(stationReport.iaddr);
-      Serial.print(", vbat: ");
-      Serial.print(stationReport.ivbat);
-      Serial.print(", vusb: ");
-      Serial.print(stationReport.ivusb);
-      Serial.print(", butt: ");
-      Serial.print(stationReport.ibutt);
-      Serial.print(", move: ");
-      Serial.print(stationReport.imove);
-      Serial.print(", chrg: ");
-      Serial.print(stationReport.ichrg);
-      Serial.print(", auth: ");
-      Serial.print(stationReport.iauth);
-      Serial.print(", wdog: ");
-      Serial.print(stationReport.iwatchdog);
-      Serial.print(", rssi: ");
-      Serial.println(stationReport.irssi);
-        
-      delay(200);
-      digitalWrite(commLEDPin, LOW);
-
+      if (radioPacketBadge.itype == 0) //check to see that it is a badge
+      {
+        digitalWrite(commLEDPin, HIGH);
+        stationReport.iaddr = (int16_t) radioPacketBadge.iaddr;
+        stationReport.ivbat = (int16_t) radioPacketBadge.ivbat;
+        stationReport.ivusb = (int16_t) radioPacketBadge.ivusb;
+        stationReport.iwatchdog = (int16_t) radioPacketBadge.iwatchdog;
+        stationReport.ibutt = (int16_t) ((radioPacketBadge.istatus >> 0) & 0x01);
+        stationReport.imove = (int16_t) ((radioPacketBadge.istatus >> 1) & 0x01);
+        stationReport.ichrg = (int16_t) ((radioPacketBadge.istatus >> 2) & 0x01);
+        stationReport.iauth = (int16_t) ((radioPacketBadge.istatus >> 3) & 0x01);
+        stationReport.irssi = (int16_t) rf95.lastRssi();
+        Serial1.write(stationReport.buffer, sizeOfStationReport);
+          
+        Serial.print("addr: ");
+        Serial.print(stationReport.iaddr);
+        Serial.print(", vbat: ");
+        Serial.print(stationReport.ivbat);
+        Serial.print(", vusb: ");
+        Serial.print(stationReport.ivusb);
+        Serial.print(", butt: ");
+        Serial.print(stationReport.ibutt);
+        Serial.print(", move: ");
+        Serial.print(stationReport.imove);
+        Serial.print(", chrg: ");
+        Serial.print(stationReport.ichrg);
+        Serial.print(", auth: ");
+        Serial.print(stationReport.iauth);
+        Serial.print(", wdog: ");
+        Serial.print(stationReport.iwatchdog);
+        Serial.print(", rssi: ");
+        Serial.println(stationReport.irssi);
+          
+        delay(200);
+        digitalWrite(commLEDPin, LOW);
+      }
     }
   }
   while (Serial1.available() > 0) 
   {
     digitalWrite(commLEDPin, HIGH);
     Serial1.readBytes(stationCommand.buffer, sizeOfStationCommand);
+    radioPacketStation.itype = 1; // tell that it is a badge
     radioPacketStation.iaddr = stationCommand.iaddr;
+    radioPacketStation.imsid = stationCommand.imsid;
     radioPacketStation.istatus = 0;
     if (stationCommand.iwarn > 0) radioPacketStation.istatus = radioPacketStation.istatus + 1;
     if (stationCommand.iauth > 0) radioPacketStation.istatus = radioPacketStation.istatus + 2;

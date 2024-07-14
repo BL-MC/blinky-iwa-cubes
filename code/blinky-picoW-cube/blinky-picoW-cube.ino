@@ -1,4 +1,4 @@
-boolean printDiagnostics = true;
+boolean printDiagnostics = false;
 
 union StationReport
 {
@@ -25,10 +25,11 @@ union StationCommand
     int16_t iaddr;
     int16_t iwarn;
     int16_t iauth;
+    int16_t imsid;
   };
-  byte buffer[6];
+  byte buffer[8];
 };
-uint8_t sizeOfStationCommand = 6;
+uint8_t sizeOfStationCommand = 8;
 
 union CubeData
 {
@@ -41,7 +42,7 @@ union CubeData
     StationCommand stationCommand;
     StationReport stationReport;
   };
-  byte buffer[32];
+  byte buffer[34];
 };
 CubeData cubeData;
 
@@ -54,7 +55,7 @@ int commLEDBright = 255;
 int resetButtonPin = 15;
 
 unsigned long lastPublishTime;
-unsigned long publishInterval = 20000;
+unsigned long publishInterval = 2000;
 
 void setupServerComm()
 {
@@ -144,6 +145,11 @@ void cubeLoop()
 
 void handleNewSettingFromServer(uint8_t address)
 {
+  if (printDiagnostics)
+  {
+      Serial.print("New Setting Address: ");
+      Serial.println(address);
+  }
   switch(address)
   {
     case 3:

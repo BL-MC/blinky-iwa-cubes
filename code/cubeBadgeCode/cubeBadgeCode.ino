@@ -42,25 +42,27 @@ const int mesgPin = 6;
 
 struct RadioPacketBadge
 {
+  byte itype;
   byte iaddr;
   byte istatus;
   int16_t ivbat;
   int16_t ivusb;
   int16_t iwatchdog;
 };
-
 RadioPacketBadge radioPacketBadge;
-uint8_t sizeOfRadioPacketBadge = 8;
+uint8_t sizeOfRadioPacketBadge = 9;
 
 struct RadioPacketStation
 {
+  byte itype;
   byte iaddr;
   byte istatus;
+  int16_t imsid;
+  byte extra[4];
 };
 
-
 RadioPacketStation radioPacketStation;
-uint8_t sizeOfRadioPacketStation = 2;
+uint8_t sizeOfRadioPacketStation = 9;
 
 struct BadgeStatus
 {
@@ -89,6 +91,7 @@ unsigned long lastMotionWarnTime = 0;
 unsigned long publishInterval = PUBLISH_INTERVAL;     
 unsigned long lastPublishTime = 0;     
 unsigned long lastAuthTime = 0;     
+int16_t old_imsid = 0;
 
 void setup() 
 {
@@ -296,6 +299,7 @@ void checkCharging(unsigned long now)
 
 void transmitMsg(unsigned long now)
 {
+  radioPacketBadge.itype = 0; // tell that it is a badge
   radioPacketBadge.iwatchdog = radioPacketBadge.iwatchdog + 1;
   if (radioPacketBadge.iwatchdog > 32765) radioPacketBadge.iwatchdog = 0;
 
@@ -317,22 +321,29 @@ void checkForMessage(unsigned long now)
   {
     if (rf95.recv((uint8_t *)&radioPacketStation, &sizeOfRadioPacketStation))
     {
-      stationStatus.iwarn = ((radioPacketStation.istatus >> 0) & 0x01);;
-      stationStatus.iauth = ((radioPacketStation.istatus >> 1) & 0x01);;
-      if (radioPacketStation.iaddr == DEVICE_ADDRESS) 
+      if (radioPacketStation.itype == 1) //check to see that it is a station
       {
-        if (badgeStatus.ichrg > 0)
+        stationStatus.iwarn = ((radioPacketStation.istatus >> 0) & 0x01);;
+        stationStatus.iauth = ((radioPacketStation.istatus >> 1) & 0x01);;
+        if (radioPacketStation.iaddr == DEVICE_ADDRESS) 
         {
-          badgeStatus.iauth = stationStatus.iauth;
-          transmitMsg(now);
-          if (badgeStatus.iauth > 0) 
+          if (old_imsid != radioPacketStation.imsid)
           {
-            for (int ii = 0; ii < 3; ++ii) soundBeep(50);
-            lastAuthTime = now;
+            if (badgeStatus.ichrg > 0)
+            {
+              badgeStatus.iauth = stationStatus.iauth;
+              transmitMsg(now);
+              if (badgeStatus.iauth > 0) 
+              {
+                for (int ii = 0; ii < 3; ++ii) soundBeep(50);
+                lastAuthTime = now;
+              }
+            }
+            if ((stationStatus.iwarn > 0)  && (badgeStatus.ichrg == 0) ) soundSOS();
+            old_imsid = radioPacketStation.imsid;
           }
         }
       }
-      if ((stationStatus.iwarn > 0)  && (badgeStatus.ichrg == 0) ) soundSOS();
     }
   }
 }
