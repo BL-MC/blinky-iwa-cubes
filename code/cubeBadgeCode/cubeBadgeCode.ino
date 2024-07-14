@@ -1,12 +1,14 @@
-#define DEVICE_ADDRESS        10
+#define chattyCathy           true
+#define DEVICE_ADDRESS        11
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
 #define RF_FREQ               433.200
-#define PUBLISH_INTERVAL      300000
+#define PUBLISH_INTERVAL      30000
 #define PUBLISH_OFFSET        10000
 #define BUTTON_DEBOUNCE_DELAY 50
 #define CHARGE_DEBOUNCE_DELAY 100
 #define BATTERY_OK_LEVEL      642
+#define AUTH_TIMEOUT          60000
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -37,7 +39,6 @@ const int vbatPin = A7;
 const int vusbPin = A1;
 const int buttPin = 5;
 const int mesgPin = 6;
-const int movePin = 10;
 
 struct RadioPacketBadge
 {
@@ -77,6 +78,7 @@ struct StationStatus
 };
 StationStatus stationStatus;
 
+int buttonState = 0;  
 int lastButtonState = 0;  
 int lastChargeState = 0;  
 
@@ -86,9 +88,16 @@ unsigned long lastMotionErrorTime = 0;
 unsigned long lastMotionWarnTime = 0;  
 unsigned long publishInterval = PUBLISH_INTERVAL;     
 unsigned long lastPublishTime = 0;     
+unsigned long lastAuthTime = 0;     
 
 void setup() 
 {
+  if (chattyCathy)
+  {
+    Serial.begin(9600);
+    delay(3000);
+    Serial.println("Starting sketch");
+  }
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
   pinMode(A0, INPUT);
@@ -96,7 +105,6 @@ void setup()
   pinMode(vusbPin, INPUT);
   pinMode(buttPin, INPUT);
   pinMode(mesgPin, OUTPUT);
-  pinMode(movePin, INPUT);
   pinMode(commLEDPin, OUTPUT);
   digitalWrite(commLEDPin, LOW);
 
@@ -123,13 +131,19 @@ void setup()
   accel.writeRegister(ADXL345_REG_INT_MAP, 16);
   accel.writeRegister(ADXL345_REG_INT_ENABLE, 16);
     
-  for (int ii = 0; ii < 3; ++ii) soundBeep(500, commLEDPin);
+  for (int ii = 0; ii < 3; ++ii) soundBeep(50);
   radioPacketBadge.iwatchdog = 0;
   randomSeed(analogRead(A0));
   publishInterval = publishInterval + (unsigned long) random(PUBLISH_OFFSET);
+  if (chattyCathy) 
+  {
+    Serial.print("publishInterval: ");
+    Serial.println(publishInterval);
+  }
   lastPublishTime = millis();
   lastMotionErrorTime = lastPublishTime;
   lastMotionWarnTime = lastPublishTime;
+  lastAuthTime = lastPublishTime;
    
 }
 void loop() 
@@ -141,7 +155,7 @@ void loop()
   checkMotion(now);
   checkCharging(now);
   if ((now - lastPublishTime) > publishInterval) transmitMsg(now);
-  checkForMessage();
+  checkForMessage(now);
 }
 
 void checkButton(unsigned long now)
@@ -153,23 +167,38 @@ void checkButton(unsigned long now)
   }
   if ((now - lastButtonDebounceTime) > BUTTON_DEBOUNCE_DELAY) 
   {
-    if (reading != badgeStatus.ibutt) 
+    if (reading != buttonState) 
     {
-      badgeStatus.ibutt = reading;
-      if (badgeStatus.ibutt == 1) 
+      buttonState = reading;
+      if (buttonState == 1)
       {
         if (badgeStatus.ichrg == 0)
         {
-          for (int ij = 0; ij < 3; ++ij)
+          if (badgeStatus.ibutt == 0)
           {
+            badgeStatus.ibutt = 1;
             transmitMsg(now);
-            for (int ii = 0; ii < 3; ++ii) soundBeep(100, mesgPin);
-            if (ij < 2) delay(4000);
+            digitalWrite(commLEDPin, HIGH);
+            digitalWrite(mesgPin, HIGH);
+          }
+          else
+          {
+            badgeStatus.ibutt = 0;
+            transmitMsg(now);
+            if (badgeStatus.imove == 0)
+            {
+              if (badgeStatus.iauth > 0)
+              {
+                digitalWrite(commLEDPin, LOW); 
+                digitalWrite(mesgPin, LOW); 
+              }
+              
+            }
           }
         }
         else
         {
-          if (radioPacketBadge.ivbat >= BATTERY_OK_LEVEL) soundBeep(500, mesgPin);
+          if (radioPacketBadge.ivbat >= BATTERY_OK_LEVEL) soundBeep(500);
         }
       }
     }
@@ -178,21 +207,25 @@ void checkButton(unsigned long now)
 }
 void checkMotion(unsigned long now)
 {
-  int movePinValue = digitalRead(movePin);
   
-  accel.readRegister(ADXL345_REG_INT_SOURCE);
-  if (movePinValue > 0)
+  uint8_t readData = accel.readRegister(ADXL345_REG_INT_SOURCE);
+  if ((readData & 16) > 0)
   {
     lastMotionErrorTime = now;
     lastMotionWarnTime = now;
     badgeStatus.imove = 0;
+    if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
+    {
+      digitalWrite(commLEDPin, LOW);
+      digitalWrite(mesgPin, LOW); 
+    }
   }
-  if (badgeStatus.ichrg == 0)
+   if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
   {
     if ((now - lastMotionWarnTime) > NO_MOTION_WARN)
     {
       lastMotionWarnTime = now;
-      soundBeep(500, mesgPin);
+      soundBeep(500);
       accel.readRegister(ADXL345_REG_INT_SOURCE);
     }
     if ((now - lastMotionErrorTime) > NO_MOTION_INTERVAL)
@@ -201,8 +234,9 @@ void checkMotion(unsigned long now)
       lastMotionErrorTime = now;
       badgeStatus.imove = 1;
       transmitMsg(now);
-      for (int ii = 0; ii < 3; ++ii) soundBeep(100, mesgPin);
-      badgeStatus.imove = 0;
+      for (int ii = 0; ii < 3; ++ii) soundBeep(500);
+      digitalWrite(commLEDPin, HIGH);
+      accel.readRegister(ADXL345_REG_INT_SOURCE);
     }
   }
 }
@@ -221,12 +255,43 @@ void checkCharging(unsigned long now)
     if (chargeReading != badgeStatus.ichrg) 
     {
       badgeStatus.ichrg = chargeReading;
-      if (badgeStatus.ichrg > 0) badgeStatus.iauth = 0;
+      badgeStatus.ibutt = 0;
+      badgeStatus.imove = 0;
+      if (badgeStatus.ichrg > 0)
+      {
+        badgeStatus.iauth = 0;
+        digitalWrite(mesgPin, LOW);
+        digitalWrite(commLEDPin, HIGH);
+      }
+      else
+      {
+        lastMotionWarnTime = now;
+        lastMotionErrorTime = now;
+        if (badgeStatus.iauth == 0)
+        {
+          digitalWrite(commLEDPin, HIGH);
+          digitalWrite(mesgPin, HIGH);
+        }
+        else
+        {
+          digitalWrite(commLEDPin, LOW);
+          digitalWrite(mesgPin, LOW);
+        }
+      }
       transmitMsg(now);
-      digitalWrite(commLEDPin, badgeStatus.ichrg);
     }
   }
-  lastChargeState = chargeReading;  
+  lastChargeState = chargeReading; 
+  if ((badgeStatus.iauth > 0) && (badgeStatus.ichrg > 0) )
+  {
+    if ((now - lastAuthTime) > AUTH_TIMEOUT) 
+    {
+      lastAuthTime = now;
+      badgeStatus.iauth = 0;
+      digitalWrite(commLEDPin, HIGH);
+      transmitMsg(now);
+    }
+  }
 }
 
 void transmitMsg(unsigned long now)
@@ -243,11 +308,10 @@ void transmitMsg(unsigned long now)
   rf95.send((uint8_t *)&radioPacketBadge, sizeOfRadioPacketBadge);
   delay(10);
   rf95.waitPacketSent();
-  if (badgeStatus.ichrg == 0) soundBeep(50, commLEDPin);
   lastPublishTime = now;
 }
 
-void checkForMessage()
+void checkForMessage(unsigned long now)
 {
   while (rf95.available())
   {
@@ -257,30 +321,42 @@ void checkForMessage()
       stationStatus.iauth = ((radioPacketStation.istatus >> 1) & 0x01);;
       if (radioPacketStation.iaddr == DEVICE_ADDRESS) 
       {
-        badgeStatus.iauth = stationStatus.iauth;
-        if (badgeStatus.iauth > 0) soundBeep(1000, mesgPin);
+        if (badgeStatus.ichrg > 0)
+        {
+          badgeStatus.iauth = stationStatus.iauth;
+          transmitMsg(now);
+          if (badgeStatus.iauth > 0) 
+          {
+            for (int ii = 0; ii < 3; ++ii) soundBeep(50);
+            lastAuthTime = now;
+          }
+        }
       }
-      if ((stationStatus.iwarn > 0)  && (badgeStatus.ichrg == 0) ) soundSOS(mesgPin);
+      if ((stationStatus.iwarn > 0)  && (badgeStatus.ichrg == 0) ) soundSOS();
     }
   }
 }
-void soundSOS(int ipin)
+void soundSOS()
 {
   int idelay[3] = {100,200,100};
   for (int is = 0; is < 3; ++is)
   {
     for (int ii = 0; ii < 3; ++ii)
     {
-      soundBeep(idelay[is],ipin);
+      soundBeep(idelay[is]);
     }
   }  
 }
-void soundBeep(int idelay, int ipin)
+void soundBeep(int idelay)
 {
+  digitalWrite(mesgPin, LOW);
+  digitalWrite(commLEDPin, LOW);
   delay(idelay);
-  digitalWrite(ipin, HIGH);
+  digitalWrite(mesgPin, HIGH);
+  digitalWrite(commLEDPin, HIGH);
   delay(idelay);
   delay(idelay);
-  digitalWrite(ipin, LOW);
+  digitalWrite(mesgPin, LOW);
+  digitalWrite(commLEDPin, LOW);
   delay(idelay);
 }

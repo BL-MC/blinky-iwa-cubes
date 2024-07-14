@@ -54,7 +54,7 @@ int commLEDBright = 255;
 int resetButtonPin = 15;
 
 unsigned long lastPublishTime;
-unsigned long publishInterval = 2000;
+unsigned long publishInterval = 20000;
 
 void setupServerComm()
 {
