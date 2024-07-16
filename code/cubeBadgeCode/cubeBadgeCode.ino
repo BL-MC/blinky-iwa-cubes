@@ -2,7 +2,7 @@
 #define DEVICE_ADDRESS        11
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
-#define NO_MOTION_ALARM_INT     5000
+#define NO_MOTION_ALARM_INT    10000
 #define RF_FREQ               433.200
 #define PUBLISH_INTERVAL      30000
 #define PUBLISH_OFFSET        10000
@@ -261,7 +261,7 @@ void checkMotion(unsigned long now)
       lastMotionAlarmTime = now;
       if (badgeStatus.imove > 0)
       {
-        soundBeep(500);
+        soundBeep(100);
         digitalWrite(commLEDPin, HIGH);
         accel.readRegister(ADXL345_REG_INT_SOURCE);
       }
@@ -348,24 +348,38 @@ void checkForMessage(unsigned long now)
     {
       if (radioPacketStation.itype == 1) //check to see that it is a station
       {
-        stationStatus.iwarn = ((radioPacketStation.istatus >> 0) & 0x01);;
-        stationStatus.iauth = ((radioPacketStation.istatus >> 1) & 0x01);;
-        if (radioPacketStation.iaddr == DEVICE_ADDRESS) 
+        stationStatus.iwarn = ((radioPacketStation.istatus >> 0) & 0x01);
+        stationStatus.iauth = ((radioPacketStation.istatus >> 1) & 0x01);
+        if (stationStatus.iauth > 0)
         {
-          if (old_imsid != radioPacketStation.imsid)
+          if (radioPacketStation.iaddr == DEVICE_ADDRESS) 
           {
-            if (badgeStatus.ichrg > 0)
+            if (old_imsid != radioPacketStation.imsid)
             {
-              badgeStatus.iauth = stationStatus.iauth;
-              transmitMsg(now);
-              if (badgeStatus.iauth > 0) 
+              if (badgeStatus.ichrg > 0)
               {
-                for (int ii = 0; ii < 3; ++ii) soundBeep(50);
-                lastAuthTime = now;
+                badgeStatus.iauth = stationStatus.iauth;
+                transmitMsg(now);
+                if (badgeStatus.iauth > 0) 
+                {
+                  for (int ii = 0; ii < 3; ++ii) soundBeep(50);
+                  lastAuthTime = now;
+                }
               }
+              if (badgeStatus.ichrg == 0) soundSOS();
+              old_imsid = radioPacketStation.imsid;
             }
-            if ((stationStatus.iwarn > 0)  && (badgeStatus.ichrg == 0) ) soundSOS();
-            old_imsid = radioPacketStation.imsid;
+          }
+        }
+        if (stationStatus.iwarn > 0 )
+        {
+          if ((radioPacketStation.iaddr == DEVICE_ADDRESS) || (radioPacketStation.iaddr == 0) )
+          {
+            if (old_imsid != radioPacketStation.imsid)
+            {
+              if  (badgeStatus.ichrg == 0) soundSOS();
+              old_imsid = radioPacketStation.imsid;
+            }
           }
         }
       }

@@ -1,4 +1,4 @@
-boolean printDiagnostics = false;
+boolean printDiagnostics = true;
 
 union StationReport
 {
@@ -29,6 +29,7 @@ union StationCommand
   };
   byte buffer[8];
 };
+StationCommand stationCommand;
 uint8_t sizeOfStationCommand = 8;
 
 union CubeData
@@ -38,11 +39,11 @@ union CubeData
     int16_t state;
     int16_t watchdog;
     int16_t newData;
-    int16_t sendStationCommand;
-    StationCommand stationCommand;
+    int16_t authorizeBadge;
+    int16_t sendWarning;
     StationReport stationReport;
   };
-  byte buffer[34];
+  byte buffer[28];
 };
 CubeData cubeData;
 
@@ -82,7 +83,8 @@ void setupCube()
 {
   cubeData.state = 1;
   cubeData.watchdog = 0;
-  cubeData.sendStationCommand = 0;
+  cubeData.authorizeBadge = 0;
+  cubeData.sendWarning = 0;
   cubeData.newData = 0;
   lastPublishTime = millis();
   Serial1.begin(57600);
@@ -153,13 +155,38 @@ void handleNewSettingFromServer(uint8_t address)
   switch(address)
   {
     case 3:
-      if (cubeData.sendStationCommand > 0)
+      stationCommand.iaddr = cubeData.authorizeBadge & 255;
+      stationCommand.imsid = (cubeData.authorizeBadge >> 12) & 15;
+      stationCommand.iauth = 1;
+      stationCommand.iwarn = 0;
+      if (printDiagnostics)
       {
-        Serial1.write(cubeData.stationCommand.buffer, sizeOfStationCommand);
-        cubeData.sendStationCommand = 0;
+          Serial.print("cubeData.authorizeBadge: ");
+          Serial.println(cubeData.authorizeBadge);
+          Serial.print("stationCommand.iaddr: ");
+          Serial.println(stationCommand.iaddr);
+          Serial.print("stationCommand.imsid: ");
+          Serial.println(stationCommand.imsid);
       }
+      Serial1.write(stationCommand.buffer, sizeOfStationCommand);
       break;
     case 4:
+      stationCommand.iaddr = cubeData.sendWarning & 255;
+      stationCommand.imsid = (cubeData.sendWarning >> 12) & 15;
+      stationCommand.iwarn = (cubeData.sendWarning >> 8) & 15;
+      stationCommand.iauth = 0;
+      if (printDiagnostics)
+      {
+          Serial.print("cubeData.sendWarning: ");
+          Serial.println(cubeData.sendWarning);
+          Serial.print("stationCommand.iaddr: ");
+          Serial.println(stationCommand.iaddr);
+          Serial.print("stationCommand.imsid: ");
+          Serial.println(stationCommand.imsid);
+          Serial.print("stationCommand.iwarn: ");
+          Serial.println(stationCommand.iwarn);
+      }
+      Serial1.write(stationCommand.buffer, sizeOfStationCommand);
       break;
     case 5:
       break;
