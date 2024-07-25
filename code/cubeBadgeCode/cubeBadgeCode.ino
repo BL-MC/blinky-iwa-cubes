@@ -1,4 +1,4 @@
-#define chattyCathy           true
+boolean chattyCathy = false;
 #define DEVICE_ADDRESS        11
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
@@ -41,35 +41,42 @@ const int vusbPin = A1;
 const int buttPin = 5;
 const int mesgPin = 6;
 
-struct RadioPacketBadge
+union RadioPacketBadge
 {
-  byte itype;
-  byte iaddr;
-  byte istatus;
-  int16_t ivbat;
-  int16_t ivusb;
-  int16_t iwatchdog;
+  struct
+  {
+    int16_t itype;
+    int16_t iaddr;
+    int16_t istatus;
+    int16_t ivbat;
+    int16_t ivusb;
+    int16_t iwatchdog;
+  };
+  uint8_t buffer[12];
 };
 RadioPacketBadge radioPacketBadge;
-uint8_t sizeOfRadioPacketBadge = 9;
+uint8_t sizeOfRadioPacketBadge = 12;
 
-struct RadioPacketStation
+union RadioPacketStation
 {
-  byte itype;
-  byte iaddr;
-  byte istatus;
-  int16_t imsid;
-  byte extra[4];
+  struct
+  {
+    int16_t itype;
+    int16_t iaddr;
+    int16_t istatus;
+    int16_t imsid;
+    int16_t extra[2];
+  };
+  uint8_t buffer[12];
 };
-
 RadioPacketStation radioPacketStation;
-uint8_t sizeOfRadioPacketStation = 9;
+uint8_t sizeOfRadioPacketStation = 12;
 
 struct BadgeStatus
 {
   int ibutt = 0;
   int imove = 0;
-  int ichrg = 0;
+  int ichrg = 1;
   int iauth = 0;
 };
 BadgeStatus badgeStatus;
@@ -83,7 +90,7 @@ StationStatus stationStatus;
 
 int buttonState = 0;  
 int lastButtonState = 0;  
-int lastChargeState = 0;  
+int lastChargeState = 1;  
 int iwarn = 0;
 
 unsigned long lastButtonDebounceTime = 0;  
@@ -151,6 +158,7 @@ void setup()
   lastMotionWarnTime = lastPublishTime;
   lastAuthTime = lastPublishTime;
   lastMotionAlarmTime = lastPublishTime;
+  digitalWrite(commLEDPin, HIGH);
    
 }
 void loop() 
@@ -331,12 +339,19 @@ void transmitMsg(unsigned long now)
   if (radioPacketBadge.iwatchdog > 32765) radioPacketBadge.iwatchdog = 0;
 
   radioPacketBadge.istatus = 0;
+
   if (badgeStatus.ibutt > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 1;
   if (badgeStatus.imove > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 2;
   if (badgeStatus.ichrg > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 4;
   if (badgeStatus.iauth > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 8;
+
+  if (chattyCathy)
+  {
+      Serial.print("wdog: ");
+      Serial.println(radioPacketBadge.iwatchdog);
+  }
   
-  rf95.send((uint8_t *)&radioPacketBadge, sizeOfRadioPacketBadge);
+  rf95.send(radioPacketBadge.buffer, sizeOfRadioPacketBadge);
   delay(10);
   rf95.waitPacketSent();
   lastPublishTime = now;
@@ -346,7 +361,7 @@ void checkForMessage(unsigned long now)
 {
   while (rf95.available())
   {
-    if (rf95.recv((uint8_t *)&radioPacketStation, &sizeOfRadioPacketStation))
+    if (rf95.recv(radioPacketStation.buffer, &sizeOfRadioPacketStation))
     {
       if (radioPacketStation.itype == 1) //check to see that it is a station
       {

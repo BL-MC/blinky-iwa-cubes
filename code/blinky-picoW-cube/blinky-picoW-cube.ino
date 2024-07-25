@@ -1,4 +1,4 @@
-boolean printDiagnostics = true;
+boolean printDiagnostics = false;
 
 union StationReport
 {
@@ -14,7 +14,7 @@ union StationReport
     int16_t iauth;
     int16_t irssi;
   };
-  byte buffer[18];
+  uint8_t buffer[18];
 };
 uint8_t sizeOfStationReport = 18;
 
@@ -27,7 +27,7 @@ union StationCommand
     int16_t iauth;
     int16_t imsid;
   };
-  byte buffer[8];
+  uint8_t buffer[8];
 };
 StationCommand stationCommand;
 uint8_t sizeOfStationCommand = 8;
@@ -43,7 +43,7 @@ union CubeData
     int16_t sendWarning;
     StationReport stationReport;
   };
-  byte buffer[28];
+  uint8_t buffer[28];
 };
 CubeData cubeData;
 
@@ -56,7 +56,7 @@ int commLEDBright = 255;
 int resetButtonPin = 15;
 
 unsigned long lastPublishTime;
-unsigned long publishInterval = 2000;
+unsigned long publishInterval = 3000;
 
 void setupServerComm()
 {
@@ -87,7 +87,7 @@ void setupCube()
   cubeData.sendWarning = 0;
   cubeData.newData = 0;
   lastPublishTime = millis();
-  Serial1.begin(57600);
+  Serial1.begin(9600);
 }
 
 void cubeLoop()
