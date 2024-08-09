@@ -15,8 +15,8 @@ RH_RF95::ModemConfigChoice modeConfig[] = {
  
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-int sigPower = 20;
-int modemConfigIndex = 0;
+int sigPower = 23;
+int modemConfigIndex = 2;
 float rfFreq = RF_FREQ;
 
 const int commLEDPin = 13;

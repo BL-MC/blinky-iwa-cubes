@@ -1,5 +1,5 @@
-boolean chattyCathy = false;
-#define DEVICE_ADDRESS        10
+boolean chattyCathy = true;
+#define DEVICE_ADDRESS        12
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
 #define NO_MOTION_ALARM_INT    10000
@@ -7,6 +7,7 @@ boolean chattyCathy = false;
 #define PUBLISH_INTERVAL      30000
 #define PUBLISH_OFFSET        10000
 #define BUTTON_DEBOUNCE_DELAY 50
+#define BUTTON_DOWN_TIME      3000
 #define CHARGE_DEBOUNCE_DELAY 100
 #define BATTERY_OK_LEVEL      642
 #define AUTH_TIMEOUT          60000
@@ -29,8 +30,8 @@ RH_RF95::ModemConfigChoice modeConfig[] = {
  
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-int sigPower = 20;
-int modemConfigIndex = 0;
+int sigPower = 23;
+int modemConfigIndex = 2;
 float rfFreq = RF_FREQ;
 
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
@@ -92,8 +93,10 @@ int buttonState = 0;
 int lastButtonState = 0;  
 int lastChargeState = 1;  
 int iwarn = 0;
+int buttonDownCount = 0;
 
 unsigned long lastButtonDebounceTime = 0;  
+unsigned long buttonDownStartTime = 0;  
 unsigned long lastChargeDebounceTime = 0;  
 unsigned long lastMotionErrorTime = 0;  
 unsigned long lastMotionWarnTime = 0;  
@@ -158,6 +161,8 @@ void setup()
   lastMotionWarnTime = lastPublishTime;
   lastAuthTime = lastPublishTime;
   lastMotionAlarmTime = lastPublishTime;
+  buttonDownStartTime = lastPublishTime;
+  buttonDownCount = 0;
   digitalWrite(commLEDPin, HIGH);
    
 }
@@ -181,50 +186,79 @@ void checkButton(unsigned long now)
   {
     lastButtonDebounceTime = now;
   }
-  if ((now - lastButtonDebounceTime) > BUTTON_DEBOUNCE_DELAY) 
+  if ((now - lastButtonDebounceTime) > BUTTON_DEBOUNCE_DELAY )
   {
     if (reading != buttonState) 
     {
       buttonState = reading;
-      if (buttonState == 1)
+      if (buttonState > 0)
       {
-        if (badgeStatus.ichrg == 0)
-        {
-          if (badgeStatus.ibutt == 0)
-          {
-            badgeStatus.ibutt = 1;
-            transmitMsg(now);
-            digitalWrite(commLEDPin, HIGH);
-            digitalWrite(mesgPin, HIGH);
-          }
-          else
-          {
-            badgeStatus.ibutt = 0;
-            transmitMsg(now);
-            if (badgeStatus.imove == 0)
-            {
-              if (badgeStatus.iauth > 0)
-              {
-                digitalWrite(commLEDPin, LOW); 
-                digitalWrite(mesgPin, LOW); 
-              }
-              
-            }
-          }
-        }
-        else
-        {
-          if (radioPacketBadge.ivbat >= BATTERY_OK_LEVEL) soundBeep(500);
-        }
+        buttonDownStartTime = now;
+        buttonDownCount = 0;
+      }
+      if (chattyCathy)
+      {
+        Serial.print("Button state: ");
+        Serial.println(buttonState);
       }
     }
   }
   lastButtonState = reading;  
+  if ((buttonState > 0) && ((now - buttonDownStartTime) > BUTTON_DOWN_TIME) )
+  {
+    if (chattyCathy)
+    {
+      Serial.print("Button down count: ");
+      Serial.println(buttonDownCount);
+    }
+    if (buttonDownCount == 0)
+    {
+      if (badgeStatus.ichrg == 0)
+      {
+        if (badgeStatus.ibutt == 0)
+        {
+          badgeStatus.ibutt = 1;
+          transmitMsg(now);
+          digitalWrite(commLEDPin, HIGH);
+          digitalWrite(mesgPin, HIGH);
+        }
+        else
+        {
+          badgeStatus.ibutt = 0;
+          transmitMsg(now);
+          if (badgeStatus.imove == 0)
+          {
+            if (badgeStatus.iauth > 0)
+            {
+              digitalWrite(commLEDPin, LOW); 
+              digitalWrite(mesgPin, LOW); 
+            }
+            
+          }
+        }
+      }
+      else
+      {
+        if (radioPacketBadge.ivbat >= BATTERY_OK_LEVEL) 
+        {
+          soundBeep(500);
+          digitalWrite(commLEDPin, HIGH);
+        }
+      }
+    }
+    buttonDownCount = buttonDownCount + 1;
+    buttonDownStartTime = now;
+  }
 }
 void checkMotion(unsigned long now)
 {
   
   uint8_t readData = accel.readRegister(ADXL345_REG_INT_SOURCE);
+  if (chattyCathy)
+  {
+    Serial.println(readData);
+    delay(1000);
+  }
   if ((readData & 16) > 0)
   {
     lastMotionErrorTime = now;
