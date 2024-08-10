@@ -7,12 +7,15 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 void setup() 
 {
+  Serial.begin(9600);
+  delay(3000);
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-  pinMode(6, OUTPUT);
-  pinMode(10, INPUT);
+  pinMode(12, OUTPUT);
+  pinMode(10, INPUT_PULLDOWN);
+  pinMode(11, INPUT_PULLDOWN);
   accel.begin();        // join i2c bus (address optional for master)
-  accel.setRange(ADXL345_RANGE_2_G); 
+  delay(1000);
+  accel.setRange(ADXL345_RANGE_16_G); 
   accel.setDataRate(ADXL345_DATARATE_100_HZ);
   accel.writeRegister(ADXL345_REG_INT_ENABLE, 0);
   accel.writeRegister(ADXL345_REG_THRESH_ACT, 3);
@@ -23,10 +26,15 @@ void setup()
 
 void loop() 
 {
+  delay(1000);  
 
-  int pin10Value = digitalRead(10);
-  byte isource = accel.readRegister(ADXL345_REG_INT_SOURCE);
-  digitalWrite(6, digitalRead(10));
+  Serial.println(accel.readRegister(ADXL345_REG_DATAX0));
+  Serial.println(accel.readRegister(ADXL345_REG_DATAY0));
+  Serial.println(accel.readRegister(ADXL345_REG_DATAZ0));
+  Serial.println(accel.readRegister(ADXL345_REG_DATAX1));
+  Serial.println(accel.readRegister(ADXL345_REG_DATAY1));
+  Serial.println(accel.readRegister(ADXL345_REG_DATAZ1));
+  Serial.println("");
 
                     
 }

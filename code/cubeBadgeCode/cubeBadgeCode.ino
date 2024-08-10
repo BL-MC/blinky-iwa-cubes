@@ -1,4 +1,4 @@
-boolean chattyCathy = true;
+boolean chattyCathy = false;
 #define DEVICE_ADDRESS        12
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
