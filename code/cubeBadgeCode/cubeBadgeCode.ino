@@ -142,7 +142,7 @@ void setup()
   accel.setRange(ADXL345_RANGE_2_G); 
   accel.setDataRate(ADXL345_DATARATE_100_HZ);
   accel.writeRegister(ADXL345_REG_INT_ENABLE, 0);
-  accel.writeRegister(ADXL345_REG_THRESH_ACT, 3);
+  accel.writeRegister(ADXL345_REG_THRESH_ACT, 4);
   accel.writeRegister(ADXL345_REG_ACT_INACT_CTL, 240);
   accel.writeRegister(ADXL345_REG_INT_MAP, 16);
   accel.writeRegister(ADXL345_REG_INT_ENABLE, 16);
