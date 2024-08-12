@@ -130,14 +130,16 @@ void setup()
   radioPacketBadge.ivusb = (int16_t) analogRead(vusbPin);
   if (chattyCathy)
   {
-    Serial.print(radioPacketBadge.ivbat);
-    Serial.print(",");
+    Serial.print("Battery voltage: ");
+    Serial.println(radioPacketBadge.ivbat);
+    Serial.print("Charge  voltage: ");
     Serial.println(radioPacketBadge.ivusb);    
   }
   if (radioPacketBadge.ivusb < radioPacketBadge.ivbat)
   {
     while(true)
     {
+      rf95.sleep();
       Watchdog.sleep();
     }
   }
