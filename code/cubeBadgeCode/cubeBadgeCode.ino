@@ -1,5 +1,5 @@
 boolean chattyCathy = false;
-#define DEVICE_ADDRESS        12
+#define DEVICE_ADDRESS        14
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
 #define NO_MOTION_ALARM_INT    10000
@@ -12,6 +12,7 @@ boolean chattyCathy = false;
 #define BATTERY_OK_LEVEL      642
 #define AUTH_TIMEOUT          60000
 
+#include <Adafruit_SleepyDog.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
@@ -123,6 +124,23 @@ void setup()
   pinMode(mesgPin, OUTPUT);
   pinMode(commLEDPin, OUTPUT);
   digitalWrite(commLEDPin, LOW);
+
+  delay(1000);
+  radioPacketBadge.ivbat = (int16_t) analogRead(vbatPin);
+  radioPacketBadge.ivusb = (int16_t) analogRead(vusbPin);
+  if (chattyCathy)
+  {
+    Serial.print(radioPacketBadge.ivbat);
+    Serial.print(",");
+    Serial.println(radioPacketBadge.ivusb);    
+  }
+  if (radioPacketBadge.ivusb < radioPacketBadge.ivbat)
+  {
+    while(true)
+    {
+      Watchdog.sleep();
+    }
+  }
 
   pinMode(RFM95_RST, OUTPUT);
   digitalWrite(RFM95_RST, HIGH);
@@ -256,8 +274,8 @@ void checkMotion(unsigned long now)
   uint8_t readData = accel.readRegister(ADXL345_REG_INT_SOURCE);
   if (chattyCathy)
   {
-    Serial.println(readData);
-    delay(1000);
+//    Serial.println(readData);
+//    delay(1000);
   }
   if ((readData & 16) > 0)
   {
