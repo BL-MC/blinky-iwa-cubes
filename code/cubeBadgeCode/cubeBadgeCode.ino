@@ -95,6 +95,7 @@ int lastButtonState = 0;
 int lastChargeState = 1;  
 int iwarn = 0;
 int buttonDownCount = 0;
+int commLED = 0;
 
 unsigned long lastButtonDebounceTime = 0;  
 unsigned long buttonDownStartTime = 0;  
@@ -123,7 +124,7 @@ void setup()
   pinMode(buttPin, INPUT);
   pinMode(mesgPin, OUTPUT);
   pinMode(commLEDPin, OUTPUT);
-  digitalWrite(commLEDPin, LOW);
+  digitalWrite(commLEDPin, commLED);
 
   delay(1000);
   radioPacketBadge.ivbat = (int16_t) analogRead(vbatPin);
@@ -183,7 +184,8 @@ void setup()
   lastMotionAlarmTime = lastPublishTime;
   buttonDownStartTime = lastPublishTime;
   buttonDownCount = 0;
-  digitalWrite(commLEDPin, HIGH);
+  commLED = 1;
+  digitalWrite(commLEDPin, commLED);
    
 }
 void loop() 
@@ -239,7 +241,8 @@ void checkButton(unsigned long now)
         {
           badgeStatus.ibutt = 1;
           transmitMsg(now);
-          digitalWrite(commLEDPin, HIGH);
+          commLED = 1;
+          digitalWrite(commLEDPin, commLED);
           digitalWrite(mesgPin, HIGH);
         }
         else
@@ -250,7 +253,8 @@ void checkButton(unsigned long now)
           {
             if (badgeStatus.iauth > 0)
             {
-              digitalWrite(commLEDPin, LOW); 
+              commLED = 0;
+              digitalWrite(commLEDPin, commLED); 
               digitalWrite(mesgPin, LOW); 
             }
             
@@ -262,7 +266,8 @@ void checkButton(unsigned long now)
         if (radioPacketBadge.ivbat >= BATTERY_OK_LEVEL) 
         {
           soundBeep(500);
-          digitalWrite(commLEDPin, HIGH);
+          commLED = 1;
+          digitalWrite(commLEDPin, commLED);
         }
       }
     }
@@ -285,7 +290,8 @@ void checkMotion(unsigned long now)
     lastMotionWarnTime = now;
     if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
     {
-      digitalWrite(commLEDPin, LOW);
+      commLED = 0;
+      digitalWrite(commLEDPin, commLED);
       digitalWrite(mesgPin, LOW); 
       if (badgeStatus.imove == 1) 
       {
@@ -315,7 +321,8 @@ void checkMotion(unsigned long now)
         badgeStatus.imove = 1;
         transmitMsg(now);
         for (int ii = 0; ii < 3; ++ii) soundBeep(500);
-        digitalWrite(commLEDPin, HIGH);
+        commLED = 1;
+        digitalWrite(commLEDPin, commLED);
         accel.readRegister(ADXL345_REG_INT_SOURCE);
       }
     }
@@ -325,7 +332,8 @@ void checkMotion(unsigned long now)
       if (badgeStatus.imove > 0)
       {
         soundBeep(100);
-        digitalWrite(commLEDPin, HIGH);
+        commLED = 1;
+        digitalWrite(commLEDPin, commLED);
         accel.readRegister(ADXL345_REG_INT_SOURCE);
       }
     }
@@ -353,7 +361,8 @@ void checkCharging(unsigned long now)
         badgeStatus.iauth = 0;
         iwarn = 0;
         digitalWrite(mesgPin, LOW);
-        digitalWrite(commLEDPin, HIGH);
+        commLED = 1;
+        digitalWrite(commLEDPin, commLED);
       }
       else
       {
@@ -361,12 +370,14 @@ void checkCharging(unsigned long now)
         lastMotionErrorTime = now;
         if (badgeStatus.iauth == 0)
         {
-          digitalWrite(commLEDPin, HIGH);
+          commLED = 1;
+          digitalWrite(commLEDPin, commLED);
           digitalWrite(mesgPin, HIGH);
         }
         else
         {
-          digitalWrite(commLEDPin, LOW);
+          commLED = 0;
+          digitalWrite(commLEDPin, commLED);
           digitalWrite(mesgPin, LOW);
         }
       }
@@ -380,7 +391,8 @@ void checkCharging(unsigned long now)
     {
       lastAuthTime = now;
       badgeStatus.iauth = 0;
-      digitalWrite(commLEDPin, HIGH);
+      commLED = 1;
+      digitalWrite(commLEDPin, commLED);
       transmitMsg(now);
     }
   }
@@ -409,6 +421,18 @@ void transmitMsg(unsigned long now)
   delay(10);
   rf95.waitPacketSent();
   lastPublishTime = now;
+  int   oldCommLED = commLED;
+  commLED = 0;
+  digitalWrite(commLEDPin, commLED);
+  delay(50);
+  commLED = 1;
+  digitalWrite(commLEDPin, commLED);
+  delay(50);
+  commLED = 0;
+  digitalWrite(commLEDPin, commLED);
+  delay(50);
+  commLED = oldCommLED;
+  digitalWrite(commLEDPin, commLED);
 }
 
 void checkForMessage(unsigned long now)
@@ -464,13 +488,16 @@ void soundSOS()
 void soundBeep(int idelay)
 {
   digitalWrite(mesgPin, LOW);
-  digitalWrite(commLEDPin, LOW);
+  commLED = 0;
+  digitalWrite(commLEDPin, commLED);
   delay(idelay);
   digitalWrite(mesgPin, HIGH);
-  digitalWrite(commLEDPin, HIGH);
+  commLED = 1;
+  digitalWrite(commLEDPin, commLED);
   delay(idelay);
   delay(idelay);
   digitalWrite(mesgPin, LOW);
-  digitalWrite(commLEDPin, LOW);
+  commLED = 0;
+  digitalWrite(commLEDPin, commLED);
   delay(idelay);
 }
