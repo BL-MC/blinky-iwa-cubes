@@ -11,6 +11,8 @@ boolean chattyCathy = false;
 #define CHARGE_DEBOUNCE_DELAY 100
 #define BATTERY_OK_LEVEL      642
 #define AUTH_TIMEOUT          60000
+#define NUM_TRANSMIT_TRY      2
+#define TRANSMIT_DELAY        2000
 
 #include <Adafruit_SleepyDog.h>
 #include <Wire.h>
@@ -416,23 +418,26 @@ void transmitMsg(unsigned long now)
       Serial.print("wdog: ");
       Serial.println(radioPacketBadge.iwatchdog);
   }
-  
-  rf95.send(radioPacketBadge.buffer, sizeOfRadioPacketBadge);
-  delay(10);
-  rf95.waitPacketSent();
-  lastPublishTime = now;
-  int   oldCommLED = commLED;
-  commLED = 0;
-  digitalWrite(commLEDPin, commLED);
-  delay(50);
-  commLED = 1;
-  digitalWrite(commLEDPin, commLED);
-  delay(50);
-  commLED = 0;
-  digitalWrite(commLEDPin, commLED);
-  delay(50);
-  commLED = oldCommLED;
-  digitalWrite(commLEDPin, commLED);
+  for (int ii = 0; ii < NUM_TRANSMIT_TRY; ++ii)
+  {  
+    rf95.send(radioPacketBadge.buffer, sizeOfRadioPacketBadge);
+    delay(10);
+    rf95.waitPacketSent();
+    lastPublishTime = now;
+    int   oldCommLED = commLED;
+    commLED = 0;
+    digitalWrite(commLEDPin, commLED);
+    delay(50);
+    commLED = 1;
+    digitalWrite(commLEDPin, commLED);
+    delay(50);
+    commLED = 0;
+    digitalWrite(commLEDPin, commLED);
+    delay(50);
+    commLED = oldCommLED;
+    digitalWrite(commLEDPin, commLED);
+    if (ii < (NUM_TRANSMIT_TRY - 1) ) delay(TRANSMIT_DELAY);
+  }
 }
 
 void checkForMessage(unsigned long now)
