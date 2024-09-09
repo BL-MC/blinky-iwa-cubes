@@ -1,5 +1,5 @@
 boolean chattyCathy = false;
-#define DEVICE_ADDRESS        14
+#define DEVICE_ADDRESS        10
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
 #define NO_MOTION_ALARM_INT    10000
@@ -11,15 +11,13 @@ boolean chattyCathy = false;
 #define CHARGE_DEBOUNCE_DELAY 100
 #define BATTERY_OK_LEVEL      642
 #define AUTH_TIMEOUT          60000
-#define NUM_TRANSMIT_TRY      2
-#define TRANSMIT_DELAY        2000
 
 #include <Adafruit_SleepyDog.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 #include <SPI.h>
-#include "RH_RF95.h"
+#include <RH_RF95.h>
 
 #define RFM95_CS 8
 #define RFM95_RST 4
@@ -33,8 +31,8 @@ RH_RF95::ModemConfigChoice modeConfig[] = {
  
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-int sigPower = 23;
-int modemConfigIndex = 2;
+int sigPower = 20;
+int modemConfigIndex = 0;
 float rfFreq = RF_FREQ;
 
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
@@ -173,7 +171,7 @@ void setup()
   for (int ii = 0; ii < 3; ++ii) soundBeep(50);
   radioPacketBadge.iwatchdog = 0;
   randomSeed(analogRead(A0));
-  publishInterval = publishInterval + (unsigned long) random(PUBLISH_OFFSET);
+//  publishInterval = publishInterval + (unsigned long) random(PUBLISH_OFFSET);
   if (chattyCathy) 
   {
     Serial.print("publishInterval: ");
@@ -416,28 +414,33 @@ void transmitMsg(unsigned long now)
   if (chattyCathy)
   {
       Serial.print("wdog: ");
-      Serial.println(radioPacketBadge.iwatchdog);
+      Serial.print(radioPacketBadge.iwatchdog);
   }
-  for (int ii = 0; ii < NUM_TRANSMIT_TRY; ++ii)
-  {  
-    rf95.send(radioPacketBadge.buffer, sizeOfRadioPacketBadge);
-    delay(10);
-    rf95.waitPacketSent();
-    lastPublishTime = now;
-    int   oldCommLED = commLED;
-    commLED = 0;
-    digitalWrite(commLEDPin, commLED);
-    delay(50);
-    commLED = 1;
-    digitalWrite(commLEDPin, commLED);
-    delay(50);
-    commLED = 0;
-    digitalWrite(commLEDPin, commLED);
-    delay(50);
-    commLED = oldCommLED;
-    digitalWrite(commLEDPin, commLED);
-    if (ii < (NUM_TRANSMIT_TRY - 1) ) delay(TRANSMIT_DELAY);
+  rf95.setCADTimeout(20000);
+  if (chattyCathy)
+  {
+      Serial.print("  Sending msg....");
   }
+  rf95.send(radioPacketBadge.buffer, sizeOfRadioPacketBadge);
+  rf95.waitPacketSent(4000);
+  if (chattyCathy)
+  {
+      Serial.println("finshed");
+  }
+  lastPublishTime = now;
+  int   oldCommLED = commLED;
+  commLED = 0;
+  digitalWrite(commLEDPin, commLED);
+  delay(50);
+  commLED = 1;
+  digitalWrite(commLEDPin, commLED);
+  delay(50);
+  commLED = 0;
+  digitalWrite(commLEDPin, commLED);
+  delay(50);
+  commLED = oldCommLED;
+  digitalWrite(commLEDPin, commLED);
+
 }
 
 void checkForMessage(unsigned long now)

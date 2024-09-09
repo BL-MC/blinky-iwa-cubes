@@ -56,12 +56,16 @@ int commLEDBright = 255;
 int resetButtonPin = 15;
 
 unsigned long lastPublishTime;
-unsigned long publishInterval = 3000;
+unsigned long publishInterval = 30000;
 
 void setupServerComm()
 {
   // Optional setup to overide defaults
-  if (printDiagnostics) Serial.begin(115200);
+  if (printDiagnostics)
+  {
+    Serial.begin(115200);
+  }
+  delay(10000);
   BlinkyPicoWCube.setChattyCathy(printDiagnostics);
   BlinkyPicoWCube.setWifiTimeoutMs(20000);
   BlinkyPicoWCube.setWifiRetryMs(20000);

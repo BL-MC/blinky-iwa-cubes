@@ -253,6 +253,11 @@ void BlinkyPicoWCube::init(int commLEDPin, int commLEDBright, int resetButtonPin
       file.close();
       g_mqttClient.setKeepAlive(g_blMqttKeepAlive);
       g_mqttClient.setSocketTimeout(g_blMqttSocketTimeout);
+      if (g_chattyCathy)
+      {
+        Serial.print("Subscribe topic: ");
+        Serial.println(g_mqttSubscribeTopic);
+      }
   }
   else
   {

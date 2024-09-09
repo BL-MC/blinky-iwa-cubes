@@ -15,8 +15,8 @@ RH_RF95::ModemConfigChoice modeConfig[] = {
  
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-int sigPower = 23;
-int modemConfigIndex = 2;
+int sigPower = 20;
+int modemConfigIndex = 0;
 float rfFreq = RF_FREQ;
 
 const int commLEDPin = 13;
@@ -115,7 +115,6 @@ void setup()
 }
 void loop() 
 {
-
   while (rf95.available())
   {
     if (rf95.recv(radioPacketBadge.buffer, &sizeOfRadioPacketBadge))
@@ -156,7 +155,7 @@ void loop()
           Serial.println(stationReport.irssi);
         }
           
-        delay(200);
+//        delay(200);
         digitalWrite(commLEDPin, LOW);
       }
     }
