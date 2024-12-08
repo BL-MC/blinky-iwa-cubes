@@ -2,6 +2,8 @@ boolean chattyCathy = false;
 #define RF_FREQ  433.200
 #include <SPI.h>
 #include "RH_RF95.h"
+#include "CRC16.h"
+#include "CRC.h"
 
 #define RFM95_CS 8
 #define RFM95_RST 4
@@ -14,6 +16,7 @@ RH_RF95::ModemConfigChoice modeConfig[] = {
       RH_RF95::ModemConfigChoice::Bw125Cr48Sf4096};
  
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
+CRC16 crc;
 
 int sigPower = 20;
 int modemConfigIndex = 0;
@@ -64,11 +67,12 @@ union RadioPacketBadge
     int16_t ivbat;
     int16_t ivusb;
     int16_t iwatchdog;
+    uint16_t crc;
   };
-  uint8_t buffer[12];
+  uint8_t buffer[14];
 };
 RadioPacketBadge radioPacketBadge;
-uint8_t sizeOfRadioPacketBadge = 12;
+uint8_t sizeOfRadioPacketBadge = 14;
 
 union RadioPacketStation
 {
@@ -79,11 +83,12 @@ union RadioPacketStation
     int16_t istatus;
     int16_t imsid;
     int16_t extra[2];
+    uint16_t crc;
   };
-  uint8_t buffer[12];
+  uint8_t buffer[14];
 };
 RadioPacketStation radioPacketStation;
-uint8_t sizeOfRadioPacketStation = 12;
+uint8_t sizeOfRadioPacketStation = 14;
 
 void setup() 
 {
@@ -119,7 +124,21 @@ void loop()
   {
     if (rf95.recv(radioPacketBadge.buffer, &sizeOfRadioPacketBadge))
     {
-      if (radioPacketBadge.itype == 0) //check to see that it is a badge
+      crc.restart();
+      for (int ii = 0; ii < (sizeOfRadioPacketBadge - 2); ii++)
+      {
+        crc.add(radioPacketBadge.buffer[ii]);
+      }
+      uint16_t crcCheck = crc.calc();
+      if (chattyCathy)
+      {
+        Serial.print("crRecv  : ");
+        Serial.println(radioPacketBadge.crc, HEX);
+        Serial.print("crcCheck: ");
+        Serial.println(crcCheck, HEX);
+      }
+      
+      if ((radioPacketBadge.itype == 0) && (radioPacketBadge.crc == crcCheck)) //check to see that it is a badge
       {
         digitalWrite(commLEDPin, HIGH);
         stationReport.iaddr = radioPacketBadge.iaddr;
@@ -170,9 +189,25 @@ void loop()
     radioPacketStation.istatus = 0;
     if (stationCommand.iwarn > 0) radioPacketStation.istatus = radioPacketStation.istatus + 1;
     if (stationCommand.iauth > 0) radioPacketStation.istatus = radioPacketStation.istatus + 2;
+
+    crc.restart();
+    for (int ii = 0; ii < (sizeOfRadioPacketStation - 2); ii++)
+    {
+      crc.add(radioPacketStation.buffer[ii]);
+    }
+    radioPacketStation.crc = crc.calc();
+    
+    rf95.setCADTimeout(20000);
+    if (chattyCathy)
+    {
+        Serial.print("  Sending msg....");
+    }
     rf95.send(radioPacketStation.buffer, sizeOfRadioPacketStation);
-    delay(10);
-    rf95.waitPacketSent();
+    rf95.waitPacketSent(4000);
+    if (chattyCathy)
+    {
+        Serial.println("finshed");
+    }
     digitalWrite(commLEDPin, LOW);  
   }
 
