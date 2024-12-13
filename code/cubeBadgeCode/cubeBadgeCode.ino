@@ -1,169 +1,114 @@
 boolean chattyCathy = false;
-#define DEVICE_ADDRESS        11
+
+#define BLINKY_DIAG         0
+#define COMM_LED_PIN       LED_BUILTIN
+#define RST_BUTTON_PIN     15
+#include <BlinkyPicoW.h>
+
 #define NO_MOTION_INTERVAL    120000
 #define NO_MOTION_WARN         60000
 #define NO_MOTION_ALARM_INT    10000
-#define RF_FREQ               433.200
-#define PUBLISH_INTERVAL      30000
-#define PUBLISH_OFFSET        10000
 #define BUTTON_DEBOUNCE_DELAY 50
 #define BUTTON_DOWN_TIME      3000
 #define CHARGE_DEBOUNCE_DELAY 100
-#define BATTERY_OK_LEVEL      642
+#define BATTERY_OK_LEVEL      450
+#define CHARGING_LEVEL        682
 #define AUTH_TIMEOUT          60000
 
-#include <Adafruit_SleepyDog.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
-#include <SPI.h>
-#include <RH_RF95.h>
-#include "CRC16.h"
-#include "CRC.h"
-
-#define RFM95_CS 8
-#define RFM95_RST 4
-#define RFM95_INT 3
-
-RH_RF95::ModemConfigChoice modeConfig[] = {
-      RH_RF95::ModemConfigChoice::Bw125Cr45Sf128, 
-      RH_RF95::ModemConfigChoice::Bw500Cr45Sf128, 
-      RH_RF95::ModemConfigChoice::Bw31_25Cr48Sf512, 
-      RH_RF95::ModemConfigChoice::Bw125Cr48Sf4096};
  
-RH_RF95 rf95(RFM95_CS, RFM95_INT);
-
-int sigPower = 20;
-int modemConfigIndex = 0;
-float rfFreq = RF_FREQ;
 
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
-CRC16 crc;
 
+const int vsysPin = A2;
+const int buttPin = 18;
+const int buzzPin = 16;
+const int rledPin = 17;
+const int ain1Pin = 11;
+const int ain2Pin = 10;
+const int isdaPin = 20;
+const int isclPin = 21;
 
-const int commLEDPin = 12; //LED_BUILTIN;
-const int vbatPin = A7;
-const int vusbPin = A1;
-const int buttPin = 5;
-const int mesgPin = 6;
-
-union RadioPacketBadge
+struct CubeSetting
 {
-  struct
-  {
-    int16_t itype;
-    int16_t iaddr;
-    int16_t istatus;
-    int16_t ivbat;
-    int16_t ivusb;
-    int16_t iwatchdog;
-    uint16_t crc;
-  };
-  uint8_t buffer[14];
+  uint16_t iauth;
+  uint16_t iwarn;
+  uint16_t publishInterval;
 };
-RadioPacketBadge radioPacketBadge;
-uint8_t sizeOfRadioPacketBadge = 14;
+CubeSetting cubeSetting;
 
-union RadioPacketStation
+struct CubeReading
 {
-  struct
-  {
-    int16_t itype;
-    int16_t iaddr;
-    int16_t istatus;
-    int16_t imsid;
-    int16_t extra[2];
-    uint16_t crc;
-  };
-  uint8_t buffer[14];
+  uint16_t ibutt;
+  uint16_t imove;
+  uint16_t ichrg;
+  uint16_t vsys;
 };
-RadioPacketStation radioPacketStation;
-uint8_t sizeOfRadioPacketStation = 14;
-
-struct BadgeStatus
-{
-  int ibutt = 0;
-  int imove = 0;
-  int ichrg = 1;
-  int iauth = 0;
-};
-BadgeStatus badgeStatus;
-
-struct StationStatus
-{
-  int iwarn = 0;
-  int iauth = 0;
-};
-StationStatus stationStatus;
+CubeReading cubeReading;
 
 int buttonState = 0;  
 int lastButtonState = 0;  
 int lastChargeState = 1;  
-int iwarn = 0;
 int buttonDownCount = 0;
-int commLED = 0;
+int rLED = 0;
 
 unsigned long lastButtonDebounceTime = 0;  
 unsigned long buttonDownStartTime = 0;  
 unsigned long lastChargeDebounceTime = 0;  
 unsigned long lastMotionErrorTime = 0;  
 unsigned long lastMotionWarnTime = 0;  
-unsigned long publishInterval = PUBLISH_INTERVAL;     
 unsigned long lastPublishTime = 0;     
 unsigned long lastAuthTime = 0; 
 unsigned long lastMotionAlarmTime = 0; 
 int16_t old_imsid = 0;
 
-void setup() 
+void setupBlinky()
+{
+  if (BLINKY_DIAG > 0) Serial.begin(9600);
+
+  BlinkyPicoW.setSsid("RedRoofInn");
+  BlinkyPicoW.setWifiPassword("SwedishChef");
+  BlinkyPicoW.setMqttServer("hub.bl-mc.com");
+  BlinkyPicoW.setMqttUsername("blinky-lite-box-01");
+  BlinkyPicoW.setMqttPassword("areallybadpassword");
+  BlinkyPicoW.setBox("blinky-lite-box-01");
+  BlinkyPicoW.setTrayType("picoW");
+  BlinkyPicoW.setTrayName("iwa-01");
+  BlinkyPicoW.setCubeType("blinky-hub");
+  BlinkyPicoW.setMqttKeepAlive(15);
+  BlinkyPicoW.setMqttSocketTimeout(4);
+  BlinkyPicoW.setMqttPort(1883);
+  BlinkyPicoW.setMqttLedFlashMs(100);
+  BlinkyPicoW.setHdwrWatchdogMs(8000);
+  BlinkyPicoW.setRouterDelay(4000);
+
+  BlinkyPicoW.begin(BLINKY_DIAG, COMM_LED_PIN, RST_BUTTON_PIN, true, sizeof(cubeSetting), sizeof(cubeReading));
+}
+
+void setupCube() 
 {
   if (chattyCathy)
   {
     Serial.begin(9600);
-    delay(3000);
     Serial.println("Starting sketch");
+    delay(30000);
   }
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-  pinMode(A0, INPUT);
-  pinMode(vbatPin, INPUT);
-  pinMode(vusbPin, INPUT);
-  pinMode(buttPin, INPUT);
-  pinMode(mesgPin, OUTPUT);
-  pinMode(commLEDPin, OUTPUT);
-  digitalWrite(commLEDPin, commLED);
+  Wire.setSDA(isdaPin);
+  Wire.setSCL(isclPin);
 
+  pinMode(vsysPin, INPUT);
+  pinMode(buttPin, INPUT);
+  pinMode(buzzPin, OUTPUT);
+  pinMode(rledPin, OUTPUT);
   delay(1000);
-  radioPacketBadge.ivbat = (int16_t) analogRead(vbatPin);
-  radioPacketBadge.ivusb = (int16_t) analogRead(vusbPin);
+  cubeReading.vsys = (int16_t) analogRead(vsysPin);
   if (chattyCathy)
   {
     Serial.print("Battery voltage: ");
-    Serial.println(radioPacketBadge.ivbat);
-    Serial.print("Charge  voltage: ");
-    Serial.println(radioPacketBadge.ivusb);    
+    Serial.println(cubeReading.vsys);
   }
-  if (radioPacketBadge.ivusb < radioPacketBadge.ivbat)
-  {
-    while(true)
-    {
-      rf95.sleep();
-      Watchdog.sleep();
-    }
-  }
-
-  pinMode(RFM95_RST, OUTPUT);
-  digitalWrite(RFM95_RST, HIGH);
-  delay(100);
-  // manual reset
-  digitalWrite(RFM95_RST, LOW);
-  delay(10);
-  digitalWrite(RFM95_RST, HIGH);
-  delay(10);
-  rf95.init();
-  rf95.setFrequency(rfFreq);
-  rf95.setModemConfig(modeConfig[modemConfigIndex]); 
-  rf95.setTxPower(sigPower, false);
-  radioPacketBadge.iaddr = DEVICE_ADDRESS;
 
   accel.begin();       
   accel.setRange(ADXL345_RANGE_2_G); 
@@ -175,14 +120,6 @@ void setup()
   accel.writeRegister(ADXL345_REG_INT_ENABLE, 16);
     
   for (int ii = 0; ii < 3; ++ii) soundBeep(50);
-  radioPacketBadge.iwatchdog = 0;
-  randomSeed(analogRead(A0));
-//  publishInterval = publishInterval + (unsigned long) random(PUBLISH_OFFSET);
-  if (chattyCathy) 
-  {
-    Serial.print("publishInterval: ");
-    Serial.println(publishInterval);
-  }
   lastPublishTime = millis();
   lastMotionErrorTime = lastPublishTime;
   lastMotionWarnTime = lastPublishTime;
@@ -190,21 +127,59 @@ void setup()
   lastMotionAlarmTime = lastPublishTime;
   buttonDownStartTime = lastPublishTime;
   buttonDownCount = 0;
-  commLED = 1;
-  digitalWrite(commLEDPin, commLED);
-   
+  rLED = 1;
+  digitalWrite(rledPin, rLED);
+  cubeSetting.publishInterval = 5000;
+
+  cubeReading.ichrg = 0; 
+  cubeReading.ibutt = 0; 
+  cubeReading.imove = 0; 
 }
-void loop() 
+void loopCube() 
 {
   unsigned long now =  millis();
-  radioPacketBadge.ivbat = (int16_t) analogRead(vbatPin);
-  radioPacketBadge.ivusb = (int16_t) analogRead(vusbPin);
+  cubeReading.vsys = (uint16_t) analogRead(vsysPin);
   checkButton(now);
   checkMotion(now);
   checkCharging(now);
-  if (iwarn > 0) soundSOS();
-  if ((now - lastPublishTime) > publishInterval) transmitMsg(now);
-  checkForMessage(now);
+  if (cubeSetting.iwarn > 0) soundSOS();
+  if ((now - lastPublishTime) > cubeSetting.publishInterval)
+  {
+    boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, false);
+    lastPublishTime = now;
+  }
+  uint16_t prev_iauth = cubeSetting.iauth;
+  if (BlinkyPicoW.retrieveCubeSetting((uint8_t*) &cubeSetting) )
+  {
+    boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+    lastPublishTime = now;
+    if (cubeSetting.iauth > 0)
+    {
+        if ((cubeReading.ichrg > 0) && (prev_iauth == 0))
+        {
+          for (int ii = 0; ii < 3; ++ii) soundBeep(50);
+          lastAuthTime = now;
+        }
+    }
+    else
+    {
+      if (prev_iauth == 1)
+      {
+        cubeSetting.iauth = 1;
+     }
+    }
+    if (cubeSetting.iwarn > 0)
+    {
+      if ((cubeReading.ichrg == 0) && (cubeSetting.iauth > 0))
+      {
+        soundSOS();
+      }
+      else
+      {
+        cubeSetting.iwarn = 0;
+      }
+    }
+  }
 }
 
 void checkButton(unsigned long now)
@@ -241,27 +216,29 @@ void checkButton(unsigned long now)
     }
     if (buttonDownCount == 0)
     {
-      if (badgeStatus.ichrg == 0)
+      if (cubeReading.ichrg ==  0)
       {
-        if (badgeStatus.ibutt == 0)
+        if (cubeReading.ibutt == 0)
         {
-          badgeStatus.ibutt = 1;
-          transmitMsg(now);
-          commLED = 1;
-          digitalWrite(commLEDPin, commLED);
-          digitalWrite(mesgPin, HIGH);
+          cubeReading.ibutt = 1;
+          boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+          lastPublishTime = now;
+          rLED = 1;
+          digitalWrite(rledPin, rLED);
+          digitalWrite(buzzPin, HIGH);
         }
         else
         {
-          badgeStatus.ibutt = 0;
-          transmitMsg(now);
-          if (badgeStatus.imove == 0)
+          cubeReading.ibutt = 0;
+          boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+          lastPublishTime = now;
+          if (cubeReading.imove == 0)
           {
-            if (badgeStatus.iauth > 0)
+            if (cubeSetting.iauth > 0)
             {
-              commLED = 0;
-              digitalWrite(commLEDPin, commLED); 
-              digitalWrite(mesgPin, LOW); 
+              rLED = 0;
+              digitalWrite(rledPin, rLED); 
+              digitalWrite(buzzPin, LOW); 
             }
             
           }
@@ -269,11 +246,11 @@ void checkButton(unsigned long now)
       }
       else
       {
-        if (radioPacketBadge.ivbat >= BATTERY_OK_LEVEL) 
+        if (cubeReading.vsys >= BATTERY_OK_LEVEL) 
         {
           soundBeep(500);
-          commLED = 1;
-          digitalWrite(commLEDPin, commLED);
+          rLED = 1;
+          digitalWrite(rledPin, rLED);
         }
       }
     }
@@ -287,32 +264,32 @@ void checkMotion(unsigned long now)
   uint8_t readData = accel.readRegister(ADXL345_REG_INT_SOURCE);
   if (chattyCathy)
   {
-//    Serial.println(readData);
-//    delay(1000);
+//    if ((readData & 16) > 0) Serial.println("Motion detected");
   }
   if ((readData & 16) > 0)
   {
     lastMotionErrorTime = now;
     lastMotionWarnTime = now;
-    if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
+    if ((cubeReading.ichrg == 0) && (cubeReading.ibutt == 0) && (cubeSetting.iauth > 0))
     {
-      commLED = 0;
-      digitalWrite(commLEDPin, commLED);
-      digitalWrite(mesgPin, LOW); 
-      if (badgeStatus.imove == 1) 
+      rLED = 0;
+      digitalWrite(rledPin, rLED);
+      digitalWrite(buzzPin, LOW); 
+      if (cubeReading.imove == 1) 
       {
-        badgeStatus.imove = 0;
-        transmitMsg(now);
+        cubeReading.imove = 0;
+        boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+        lastPublishTime = now;
       }
     }
-    badgeStatus.imove = 0;
+    cubeReading.imove = 0;
   }
-  if ((badgeStatus.ichrg == 0) && (badgeStatus.ibutt == 0) && (badgeStatus.iauth > 0))
+  if ((cubeReading.ichrg == 0) && (cubeReading.ibutt == 0) && (cubeSetting.iauth > 0))
   {
     if ((now - lastMotionWarnTime) > NO_MOTION_WARN)
     {
       lastMotionWarnTime = now;
-      if (badgeStatus.imove == 0)
+      if (cubeReading.imove == 0)
       {
         soundBeep(500);
         accel.readRegister(ADXL345_REG_INT_SOURCE);
@@ -322,24 +299,25 @@ void checkMotion(unsigned long now)
     {
       lastMotionWarnTime = now;
       lastMotionErrorTime = now;
-      if (badgeStatus.imove == 0)
+      if (cubeReading.imove == 0)
       {
-        badgeStatus.imove = 1;
-        transmitMsg(now);
+        cubeReading.imove = 1;
+        boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+        lastPublishTime = now;
         for (int ii = 0; ii < 3; ++ii) soundBeep(500);
-        commLED = 1;
-        digitalWrite(commLEDPin, commLED);
+        rLED = 1;
+        digitalWrite(rledPin, rLED);
         accel.readRegister(ADXL345_REG_INT_SOURCE);
       }
     }
     if ((now - lastMotionAlarmTime) > NO_MOTION_ALARM_INT)
     {
       lastMotionAlarmTime = now;
-      if (badgeStatus.imove > 0)
+      if (cubeReading.imove > 0)
       {
         soundBeep(100);
-        commLED = 1;
-        digitalWrite(commLEDPin, commLED);
+        rLED = 1;
+        digitalWrite(rledPin, rLED);
         accel.readRegister(ADXL345_REG_INT_SOURCE);
       }
     }
@@ -350,166 +328,68 @@ void checkCharging(unsigned long now)
 {
 
   int chargeReading = 0;
-  if (radioPacketBadge.ivusb > radioPacketBadge.ivbat) chargeReading = 1;
+  if (cubeReading.vsys > CHARGING_LEVEL) chargeReading = 1;
   if (chargeReading != lastChargeState) 
   {
     lastChargeDebounceTime = now;
   }
   if ((now - lastChargeDebounceTime) > CHARGE_DEBOUNCE_DELAY) 
   {
-    if (chargeReading != badgeStatus.ichrg) 
+    if (chargeReading != cubeReading.ichrg) 
     {
-      badgeStatus.ichrg = chargeReading;
-      badgeStatus.ibutt = 0;
-      badgeStatus.imove = 0;
-      if (badgeStatus.ichrg > 0)
+      cubeReading.ichrg = chargeReading;
+      cubeReading.ibutt = 0;
+      cubeReading.imove = 0;
+      if (cubeReading.ichrg > 0)
       {
-        badgeStatus.iauth = 0;
-        iwarn = 0;
-        digitalWrite(mesgPin, LOW);
-        commLED = 1;
-        digitalWrite(commLEDPin, commLED);
+        cubeSetting.iauth = 0;
+        cubeSetting.iwarn = 0;
+        digitalWrite(buzzPin, LOW);
+        rLED = 1;
+        digitalWrite(rledPin, rLED);
       }
       else
       {
         lastMotionWarnTime = now;
         lastMotionErrorTime = now;
-        if (badgeStatus.iauth == 0)
+        if (cubeSetting.iauth == 0)
         {
-          commLED = 1;
-          digitalWrite(commLEDPin, commLED);
-          digitalWrite(mesgPin, HIGH);
+          rLED = 1;
+          digitalWrite(rledPin, rLED);
+          digitalWrite(buzzPin, HIGH);
         }
         else
         {
-          commLED = 0;
-          digitalWrite(commLEDPin, commLED);
-          digitalWrite(mesgPin, LOW);
+          rLED = 0;
+          digitalWrite(rledPin, rLED);
+          digitalWrite(buzzPin, LOW);
         }
       }
-      transmitMsg(now);
+      boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+      lastPublishTime = now;
     }
   }
   lastChargeState = chargeReading; 
-  if ((badgeStatus.iauth > 0) && (badgeStatus.ichrg > 0) )
+  if ((cubeSetting.iauth > 0) && (cubeReading.ichrg > 0) )
   {
     if ((now - lastAuthTime) > AUTH_TIMEOUT) 
     {
       lastAuthTime = now;
-      badgeStatus.iauth = 0;
-      commLED = 1;
-      digitalWrite(commLEDPin, commLED);
-      transmitMsg(now);
+      cubeSetting.iauth = 0;
+      rLED = 1;
+      digitalWrite(rledPin, rLED);
+      boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+      lastPublishTime = now;
     }
   }
-}
-
-void transmitMsg(unsigned long now)
-{
-  radioPacketBadge.itype = 0; // tell that it is a badge
-  radioPacketBadge.iwatchdog = radioPacketBadge.iwatchdog + 1;
-  if (radioPacketBadge.iwatchdog > 32765) radioPacketBadge.iwatchdog = 0;
-
-  radioPacketBadge.istatus = 0;
-
-  if (badgeStatus.ibutt > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 1;
-  if (badgeStatus.imove > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 2;
-  if (badgeStatus.ichrg > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 4;
-  if (badgeStatus.iauth > 0) radioPacketBadge.istatus = radioPacketBadge.istatus + 8;
-  crc.restart();
-  for (int ii = 0; ii < (sizeOfRadioPacketBadge - 2); ii++)
+  if ((cubeSetting.iauth == 0) && (cubeReading.ichrg == 0) )
   {
-    crc.add(radioPacketBadge.buffer[ii]);
-  }
-  radioPacketBadge.crc = crc.calc();
-  
-  if (chattyCathy)
-  {
-      Serial.println(" ");
-      Serial.print("wdog: ");
-      Serial.println(radioPacketBadge.iwatchdog);
-      Serial.print("crc: ");
-      Serial.println(radioPacketBadge.crc, HEX);
-  }
-  rf95.setCADTimeout(20000);
-  if (chattyCathy)
-  {
-      Serial.print("  Sending msg....");
-  }
-  rf95.send(radioPacketBadge.buffer, sizeOfRadioPacketBadge);
-  rf95.waitPacketSent(4000);
-  if (chattyCathy)
-  {
-      Serial.println("finshed");
-  }
-  lastPublishTime = now;
-  int   oldCommLED = commLED;
-  commLED = 0;
-  digitalWrite(commLEDPin, commLED);
-  delay(50);
-  commLED = 1;
-  digitalWrite(commLEDPin, commLED);
-  delay(50);
-  commLED = 0;
-  digitalWrite(commLEDPin, commLED);
-  delay(50);
-  commLED = oldCommLED;
-  digitalWrite(commLEDPin, commLED);
-
-}
-
-void checkForMessage(unsigned long now)
-{
-  while (rf95.available())
-  {
-    if (rf95.recv(radioPacketStation.buffer, &sizeOfRadioPacketStation))
-    {
-      crc.restart();
-      for (int ii = 0; ii < (sizeOfRadioPacketStation - 2); ii++)
-      {
-        crc.add(radioPacketStation.buffer[ii]);
-      }
-      uint16_t crcCheck = crc.calc();
-      if (chattyCathy)
-      {
-        Serial.print("crRecv  : ");
-        Serial.println(radioPacketStation.crc, HEX);
-        Serial.print("crcCheck: ");
-        Serial.println(crcCheck, HEX);
-      }
-      if ((radioPacketStation.itype == 1) && (radioPacketStation.crc == crcCheck)) //check to see that it is a station
-      {
-        if (old_imsid != radioPacketStation.imsid)
-        {
-          stationStatus.iwarn = ((radioPacketStation.istatus >> 0) & 0x01);
-          stationStatus.iauth = ((radioPacketStation.istatus >> 1) & 0x01);
-          if (stationStatus.iauth > 0)
-          {
-            if (radioPacketStation.iaddr == DEVICE_ADDRESS) 
-            {
-              if ((badgeStatus.ichrg > 0) && (badgeStatus.iauth == 0))
-              {
-                badgeStatus.iauth = stationStatus.iauth;
-                transmitMsg(now);
-                for (int ii = 0; ii < 3; ++ii) soundBeep(50);
-                lastAuthTime = now;
-              }
-            }
-          }
-          if ((badgeStatus.ichrg == 0) && (badgeStatus.iauth > 0))
-          {
-            if ((radioPacketStation.iaddr == DEVICE_ADDRESS) || (radioPacketStation.iaddr == 0) )
-            {
-              iwarn = stationStatus.iwarn;
-              if (iwarn > 0) soundSOS();
-            }
-          }
-          old_imsid = radioPacketStation.imsid;
-        }
-      }
-    }
+      rLED = 1;
+      digitalWrite(rledPin, HIGH);
+      digitalWrite(buzzPin, HIGH);
   }
 }
+
 void soundSOS()
 {
   int idelay[3] = {100,200,100};
@@ -523,17 +403,17 @@ void soundSOS()
 }
 void soundBeep(int idelay)
 {
-  digitalWrite(mesgPin, LOW);
-  commLED = 0;
-  digitalWrite(commLEDPin, commLED);
+  digitalWrite(buzzPin, LOW);
+  rLED = 0;
+  digitalWrite(rledPin, rLED);
   delay(idelay);
-  digitalWrite(mesgPin, HIGH);
-  commLED = 1;
-  digitalWrite(commLEDPin, commLED);
+  digitalWrite(buzzPin, HIGH);
+  rLED = 1;
+  digitalWrite(rledPin, rLED);
   delay(idelay);
   delay(idelay);
-  digitalWrite(mesgPin, LOW);
-  commLED = 0;
-  digitalWrite(commLEDPin, commLED);
+  digitalWrite(buzzPin, LOW);
+  rLED = 0;
+  digitalWrite(rledPin, rLED);
   delay(idelay);
 }

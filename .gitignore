@@ -17,4 +17,5 @@ node_modules
 .config.json
 *.backup
 
+code/cubeBadgeCode/data/creds.txt
 

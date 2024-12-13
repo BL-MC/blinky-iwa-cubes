@@ -9,6 +9,10 @@ void setup()
 {
   Serial.begin(9600);
   delay(3000);
+
+  Wire.setSDA(20);
+  Wire.setSCL(21);
+
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(12, OUTPUT);
   pinMode(10, INPUT_PULLDOWN);

@@ -1,5 +1,0 @@
-(fp_lib_table
-  (version 7)
-  (lib (name "FEATHER_M0_BASIC_PROTO")(type "KiCad")(uri "${KIPRJMOD}/Library/FEATHER_M0_BASIC_PROTO")(options "")(descr ""))
-  (lib (name "dmcginnis427Footprints")(type "KiCad")(uri "${KIPRJMOD}/Library/dmcginnis427Footprints")(options "")(descr ""))
-)
