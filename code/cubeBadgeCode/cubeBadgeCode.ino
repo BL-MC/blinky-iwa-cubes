@@ -44,6 +44,7 @@ struct CubeReading
   uint16_t ibutt;
   uint16_t imove;
   uint16_t ichrg;
+  uint16_t ifika;
   uint16_t vsys;
 };
 CubeReading cubeReading;
@@ -93,7 +94,7 @@ void setupCube()
   {
     Serial.begin(9600);
     Serial.println("Starting sketch");
-    delay(30000);
+    delay(3000);
   }
   Wire.setSDA(isdaPin);
   Wire.setSCL(isclPin);
@@ -134,6 +135,8 @@ void setupCube()
   cubeReading.ichrg = 0; 
   cubeReading.ibutt = 0; 
   cubeReading.imove = 0; 
+  cubeReading.ifika = 0; 
+
 }
 void loopCube() 
 {
@@ -194,69 +197,78 @@ void checkButton(unsigned long now)
     if (reading != buttonState) 
     {
       buttonState = reading;
-      if (buttonState > 0)
+      if ((buttonState > 0) && (buttonDownCount == 0))
       {
         buttonDownStartTime = now;
-        buttonDownCount = 0;
       }
+      if ((buttonState > 0) && (cubeSetting.iauth > 0) && (cubeReading.ibutt == 0)) buttonDownCount = buttonDownCount + 1;
       if (chattyCathy)
       {
         Serial.print("Button state: ");
         Serial.println(buttonState);
+        Serial.print("Button count: ");
+        Serial.println(buttonDownCount);
       }
     }
+  }
+  if ((buttonState == 0) && (buttonDownCount >= 3)  && (cubeSetting.iauth > 0) && (cubeReading.ibutt == 0) )
+  {
+    cubeReading.ifika = 1;
+    buttonDownCount = 0;
+    boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+    lastPublishTime = now;
+    soundBeep(50);
+    delay(50);
+    soundBeep(50);
+    rLED = 1;
+    digitalWrite(rledPin, rLED);
+    delay(2000);
+    accel.readRegister(ADXL345_REG_INT_SOURCE);
   }
   lastButtonState = reading;  
   if ((buttonState > 0) && ((now - buttonDownStartTime) > BUTTON_DOWN_TIME) )
   {
-    if (chattyCathy)
+    if (cubeReading.ichrg ==  0)
     {
-      Serial.print("Button down count: ");
-      Serial.println(buttonDownCount);
-    }
-    if (buttonDownCount == 0)
-    {
-      if (cubeReading.ichrg ==  0)
+      if (cubeReading.ibutt == 0)
       {
-        if (cubeReading.ibutt == 0)
-        {
-          cubeReading.ibutt = 1;
-          boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
-          lastPublishTime = now;
-          rLED = 1;
-          digitalWrite(rledPin, rLED);
-          digitalWrite(buzzPin, HIGH);
-        }
-        else
-        {
-          cubeReading.ibutt = 0;
-          boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
-          lastPublishTime = now;
-          if (cubeReading.imove == 0)
-          {
-            if (cubeSetting.iauth > 0)
-            {
-              rLED = 0;
-              digitalWrite(rledPin, rLED); 
-              digitalWrite(buzzPin, LOW); 
-            }
-            
-          }
-        }
+        cubeReading.ibutt = 1;
+        boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+        lastPublishTime = now;
+        rLED = 1;
+        digitalWrite(rledPin, rLED);
+        digitalWrite(buzzPin, HIGH);
       }
       else
       {
-        if (cubeReading.vsys >= BATTERY_OK_LEVEL) 
+        cubeReading.ibutt = 0;
+        boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+        lastPublishTime = now;
+        if (cubeReading.imove == 0)
         {
-          soundBeep(500);
-          rLED = 1;
-          digitalWrite(rledPin, rLED);
+          if (cubeSetting.iauth > 0)
+          {
+            rLED = 0;
+            digitalWrite(rledPin, rLED); 
+            digitalWrite(buzzPin, LOW); 
+          }
+          
         }
       }
     }
-    buttonDownCount = buttonDownCount + 1;
+    else
+    {
+      if (cubeReading.vsys >= BATTERY_OK_LEVEL) 
+      {
+        soundBeep(500);
+        rLED = 1;
+        digitalWrite(rledPin, rLED);
+      }
+    }
     buttonDownStartTime = now;
+    buttonDownCount = 0;
   }
+  if ((now - buttonDownStartTime) > BUTTON_DOWN_TIME) buttonDownCount = 0;
 }
 void checkMotion(unsigned long now)
 {
@@ -281,10 +293,21 @@ void checkMotion(unsigned long now)
         boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
         lastPublishTime = now;
       }
+      if (cubeReading.ifika  == 1)
+      {
+        cubeReading.ifika = 0;
+        boolean successful = BlinkyPicoW.publishCubeData((uint8_t*) &cubeSetting, (uint8_t*) &cubeReading, true);
+        lastPublishTime = now;
+        soundBeep(50);
+        delay(50);
+        soundBeep(50);
+        rLED = 0;
+        digitalWrite(rledPin, rLED);
+      }
     }
     cubeReading.imove = 0;
   }
-  if ((cubeReading.ichrg == 0) && (cubeReading.ibutt == 0) && (cubeSetting.iauth > 0))
+  if ((cubeReading.ichrg == 0) && (cubeReading.ibutt == 0) && (cubeSetting.iauth > 0) && (cubeReading.ifika == 0))
   {
     if ((now - lastMotionWarnTime) > NO_MOTION_WARN)
     {
