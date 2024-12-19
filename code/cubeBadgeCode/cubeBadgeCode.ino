@@ -183,6 +183,14 @@ void loopCube()
       }
     }
   }
+  if (cubeSetting.iauth > 0)
+  {
+    if (!BlinkyPicoW.isWiFiConnected())
+    {
+      soundBeep(50);
+      delay(50);
+    }
+  }
 }
 
 void checkButton(unsigned long now)
