@@ -569,6 +569,8 @@ void BlinkyPicoWCube::serveWebPage()
       }
     }
     if (g_chattyCathy) Serial.println(header);
+    if (header.indexOf("Upgrade-Insecure-Requests: 1") < 0) return;
+
     client.println("HTTP/1.1 200 OK");
     client.println("Content-Type: text/html");
     client.println("Connection: close");  // the connection will be closed after completion of the response
